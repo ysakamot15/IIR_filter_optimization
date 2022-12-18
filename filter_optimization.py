@@ -102,10 +102,12 @@ def filtering(x, pole_array, zero_array, a0):
 
 
 
-def annealing(ideal_H, omega_list, M, N, cs, T, alpha, init_a0 = None, init_pole_array = None, init_zero_array = None, is_mse = True):
+def annealing(HD, omega_list, M, N, cs, T, alpha, is_mse = True,
+    init_a0 = None, init_pole_array = None, init_zero_array = None):
     h = np.zeros(len(omega_list), dtype=np.complex)
     for i, omg in enumerate(omega_list):
-        h[i] = ideal_H(omg)
+        h[i] = HD(omg)
+
     if init_a0 is None:
         a0 = 1.0
     else:
@@ -131,8 +133,6 @@ def annealing(ideal_H, omega_list, M, N, cs, T, alpha, init_a0 = None, init_pole
     now_cost = F(best_pole_array, best_zero_array, best_a0)
     best_cost = now_cost
 
-    # T = 10
-    # alpha = 0.998
 
     cnt = 0
     while(True):
@@ -177,8 +177,8 @@ def annealing(ideal_H, omega_list, M, N, cs, T, alpha, init_a0 = None, init_pole
     return best_a0, best_pole_array, best_zero_array, best_cost
 
 
-np.random.seed(10)
-H = lambda omg :  np.exp(- 1j * 2 * omg) if omg >= 2 * 0.2 * np.pi and omg <= 2 * 0.3 * np.pi   else 0.0
+np.random.seed(0)
+H = lambda omg :  np.exp(- 1j * 12 * omg) if omg >= 2 * 0.2 * np.pi and omg <= 2 * 0.3 * np.pi   else 0.0
 # H = lambda omg : (1 + np.exp(-2j * omg))/(1 - 0.5 * np.exp(-1j * omg) + 0.3 * np.exp(-2j*omg) +  0.2 * np.exp(-3j*omg) -  0.1 * np.exp(-4j*omg))
 # H = lambda omg : np.exp(- 1j * 2 * omg) if (omg >= 2 * 0.1 * np.pi and omg <= 2 * 0.15 * np.pi) or (omg >= 2 * 0.3 * np.pi and omg <= 2 * 0.4 * np.pi)    else 0.0
 # omega_list1 = np.linspace(0, 2 * 0.07 * np.pi , 200)
@@ -213,7 +213,7 @@ visualize_characteristic(H, omega_list, "ref.png")
 
 best_cost = 1e9
 for i in range(5):
-    a0_, pole_array_, zero_array_, cost = annealing(H, omega_list, 10, 10, 5, 10, 0.998, is_mse = False)
+    a0_, pole_array_, zero_array_, cost = annealing(H, omega_list, 8, 8, 50, 10, 0.998, is_mse = False)
     if(cost < best_cost):
         a0 = a0_
         pole_array = np.copy(pole_array_)
