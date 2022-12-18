@@ -9,7 +9,7 @@ def visualize_characteristic(H, omega_list, save_file_name):
 
     fig = plt.figure()
     ax1 = fig.add_subplot(2, 1, 1)
-    amp_h = np.abs(h) #20 * np.log10(np.abs(h) +  1e-20)
+    amp_h = np.abs(h) 
     angle_h = np.unwrap(np.angle(h))
     ax1.plot(omega_list, amp_h, marker="o")
     ax2 = fig.add_subplot(2, 1, 2)
@@ -17,52 +17,6 @@ def visualize_characteristic(H, omega_list, save_file_name):
 
     fig.savefig(save_file_name)
     plt.close()
-
-def compute_mean_square_error(H_, ref_h, omega_list):
-
-    h = np.zeros(len(omega_list), dtype= np.complex)
-    for i, omg in enumerate(omega_list):
-        h[i] = H_(omg)
-
-    e = np.real((ref_h - h) * np.conjugate(ref_h - h))
-    return np.mean(e) 
-
-
-def compute_abs_max_error(H_, ref_h, omega_list):
-
-    h = np.zeros(len(omega_list), dtype= np.complex)
-    for i, omg in enumerate(omega_list):
-        h[i] = H_(omg)
-    # e = np.real((ref_h - h) * np.conjugate(ref_h - h))
-
-    e = np.abs(ref_h - h)
-    return np.max(e)
-
-
-
-def transfer_func(a0, pole_array, zero_array, omega):
-    denomi = 1.0
-    for p in  pole_array:
-        denomi *= (1 - p * np.exp(-1j * omega)) * (1 - np.conjugate(p) * np.exp(-1j * omega))
-
-    numer = 1.0
-    for z in zero_array:
-        numer *= (1 - z * np.exp(-1j * omega)) * (1 - np.conjugate(z) * np.exp(-1j * omega))
-    
-    return a0 * (numer/denomi)
-
-
-def obj_func(pole_array, zero_array, a0, ref_h, omega_list, cs, is_mse = True):
-    H_ = lambda omega : transfer_func(a0, pole_array, zero_array, omega)
-    max_p2 = np.max(np.real(pole_array * np.conjugate(pole_array)))
-    if is_mse:
-        e = compute_mean_square_error(H_, ref_h, omega_list)
-    else:
-        e = compute_abs_max_error(H_, ref_h, omega_list)
-
-    return e + (cs * max_p2 if max_p2 >= 1.0 else 0.0) 
-
-
 
 def feedback_filter(x, pole):
     b1 = -np.real(pole) * 2
@@ -90,20 +44,65 @@ def feedforward_filter(x, zero):
         y[i] = s
     return np.copy(y)
 
-def filtering(x, pole_array, zero_array, a0):
+def filtering(x, p_array, q_array, a0):
     y = np.copy(x)
-    for z in zero_array:
+    for z in q_array:
         y = feedforward_filter(y, z)
-    for p in pole_array:
+    for p in p_array:
         y = feedback_filter(y, p)
 
     y *= a0
     return y
 
+def compute_mean_square_error(H_, ref_h, omega_list):
+
+    h = np.zeros(len(omega_list), dtype= np.complex)
+    for i, omg in enumerate(omega_list):
+        h[i] = H_(omg)
+
+    e = np.real((ref_h - h) * np.conjugate(ref_h - h))
+    return np.mean(e) 
 
 
-def annealing(HD, omega_list, M, N, cs, T, alpha, is_mse = True,
-    init_a0 = None, init_pole_array = None, init_zero_array = None):
+def compute_abs_max_error(H_, ref_h, omega_list):
+
+    h = np.zeros(len(omega_list), dtype= np.complex)
+    for i, omg in enumerate(omega_list):
+        h[i] = H_(omg)
+    e = np.abs(ref_h - h)
+    return np.max(e)
+
+
+
+def frequency_characteristic_func(a0, p_array, q_array, omega):
+    denomi = 1.0
+    for p in  p_array:
+        denomi *= (1 - p * np.exp(-1j * omega)) *\
+            (1 - np.conjugate(p) * np.exp(-1j * omega))
+
+    numer = 1.0
+    for z in q_array:
+        numer *= (1 - z * np.exp(-1j * omega)) *\
+            (1 - np.conjugate(z) * np.exp(-1j * omega))
+    
+    return a0 * (numer/denomi)
+
+
+def obj_func(p_array, q_array, a0, ref_h, omega_list, c, is_mse = True):
+    H = lambda omega : frequency_characteristic_func(a0, p_array, q_array, omega)
+    max_p2 = np.max(np.real(p_array * np.conjugate(p_array)))
+    if is_mse:
+        e = compute_mean_square_error(H, ref_h, omega_list)
+    else:
+        e = compute_abs_max_error(H, ref_h, omega_list)
+
+    return e + (c * max_p2 if max_p2 >= 1.0 else 0.0) 
+
+
+
+def annealing(HD, omega_list, M, N, c, T, alpha, is_mse = True,
+    init_a0 = None, init_p_array = None, init_q_array = None):
+
     h = np.zeros(len(omega_list), dtype=np.complex)
     for i, omg in enumerate(omega_list):
         h[i] = HD(omg)
@@ -112,69 +111,60 @@ def annealing(HD, omega_list, M, N, cs, T, alpha, is_mse = True,
         a0 = 1.0
     else:
         a0 = init_a0
-    if init_pole_array is None:
-        pole_array = np.random.randn(M//2) + 1j * np.random.randn(M//2) 
+    if init_p_array is None:
+        p_array = np.random.randn(M//2) + 1j * np.random.randn(M//2) 
     else:
-        pole_array = np.copy(init_pole_array)
+        p_array = np.copy(init_p_array)
     
-    if init_zero_array is None:
-        zero_array = np.random.randn(N//2) + 1j * np.random.randn(N//2)
+    if init_q_array is None:
+        q_array = np.random.randn(N//2) + 1j * np.random.randn(N//2)
     else:
-        zero_array = np.copy(init_zero_array)
+        q_array = np.copy(init_q_array)
 
 
-    best_pole_array = np.copy(pole_array)
-    best_zero_array = np.copy(zero_array)
+    best_p_array = np.copy(p_array)
+    best_q_array = np.copy(q_array)
     best_a0 = a0
 
-    F = lambda pole_array_, zero_array_, a0_: \
-        obj_func(pole_array_, zero_array_, a0_, h, omega_list, cs, is_mse)
+    F = lambda p_array_, q_array_, a0_: \
+        obj_func(p_array_, q_array_, a0_, h, omega_list, c, is_mse)
 
-    now_cost = F(best_pole_array, best_zero_array, best_a0)
+    now_cost = F(best_p_array, best_q_array, best_a0)
     best_cost = now_cost
-
 
     cnt = 0
     while(True):
         if(cnt > 10000):
             break
-        k = np.random.randint(0, M//2 + N//2 + 1)
+        k = np.random.randint(0, M//2 + N//2 + 1) #TODO
 
         save_a0 = a0
-        save_pole_array = np.copy(pole_array)
-        save_zero_array = np.copy(zero_array)
+        save_p_array = np.copy(p_array)
+        save_q_array = np.copy(q_array)
 
         a0 += np.random.randn() * 0.01
-        pole_array += (np.random.randn(M//2) + 1j * np.random.randn(M//2)) * 0.01
-        zero_array += (np.random.randn(N//2) + 1j * np.random.randn(N//2)) * 0.01
+        p_array += (np.random.randn(M//2) + 1j * np.random.randn(M//2)) * 0.01
+        q_array += (np.random.randn(N//2) + 1j * np.random.randn(N//2)) * 0.01
 
         
-        tmp_cost = F(pole_array, zero_array, a0)
+        tmp_cost = F(p_array, q_array, a0)
         if(np.exp((now_cost - tmp_cost)/T) > np.random.rand() ):
-        # if(((now_cost - tmp_cost)) >  np.log(np.random.rand()) * T):
-        # if(tmp_cost < now_cost):
             now_cost = tmp_cost
             print("now_cost = ", now_cost, T, cnt)
             if(now_cost < best_cost):
                 best_a0 = a0
-                best_pole_array = np.copy(pole_array)
-                best_zero_array = np.copy(zero_array)
+                best_p_array = np.copy(p_array)
+                best_q_array = np.copy(q_array)
                 best_cost = now_cost
                 print("best_cost = ", best_cost)
         else:
             a0 = save_a0
-            pole_array = np.copy(save_pole_array)
-            zero_array = np.copy(save_zero_array)
+            p_array = np.copy(save_p_array)
+            q_array = np.copy(save_q_array)
 
-            # if(k <= 0):
-            #     a0 = save
-            # elif(k <= M//2):
-            #     pole_array[k - 1] = save
-            # else:
-            #     zero_array[k - (M//2 + 1)] = save
         cnt += 1        
         T *= alpha
-    return best_a0, best_pole_array, best_zero_array, best_cost
+    return best_a0, best_p_array, best_q_array, best_cost
 
 
 np.random.seed(0)
@@ -213,25 +203,26 @@ visualize_characteristic(H, omega_list, "ref.png")
 
 best_cost = 1e9
 for i in range(5):
-    a0_, pole_array_, zero_array_, cost = annealing(H, omega_list, 8, 8, 50, 10, 0.998, is_mse = False)
+    a0_, p_array_, q_array_, cost =\
+        annealing(H, omega_list, 8, 8, 50, 10, 0.998, is_mse = False)
     if(cost < best_cost):
         a0 = a0_
-        pole_array = np.copy(pole_array_)
-        zero_array = np.copy(zero_array_)
+        p_array = np.copy(p_array_)
+        q_array = np.copy(q_array_)
         best_cost = cost
 
-# a0, pole_array, zero_array = annealing(H, omega_list, 8, 8, 5.0, 10, 0.998, a0, pole_array, zero_array)
-# a0, pole_array, zero_array = annealing(H, omega_list, 8, 8, 5.0, 10, 0.998, a0, pole_array, zero_array)
-# a0, pole_array, zero_array = annealing(H, omega_list, 8, 8, 5.0, 10, 0.998, a0, pole_array, zero_array)
+# a0, p_array, q_array = annealing(H, omega_list, 8, 8, 5.0, 10, 0.998, a0, p_array, q_array)
+# a0, p_array, q_array = annealing(H, omega_list, 8, 8, 5.0, 10, 0.998, a0, p_array, q_array)
+# a0, p_array, q_array = annealing(H, omega_list, 8, 8, 5.0, 10, 0.998, a0, p_array, q_array)
 
-# a0, pole_array, zero_array, _ = annealing(H, omega_list, 8, 8, 5.0, 1, 0.99, a0, pole_array, zero_array, False)
+# a0, p_array, q_array, _ = annealing(H, omega_list, 8, 8, 5.0, 1, 0.99, a0, p_array, q_array, False)
 
 
-for p in pole_array:
+for p in p_array:
     print(np.abs(p))
 
 
-H_ = lambda omega : transfer_func(a0, pole_array, zero_array, omega)
+H_ = lambda omega : frequency_characteristic_func(a0, p_array, q_array, omega)
 
 h = np.zeros(len(omega_list), dtype=np.complex)
 for i, omg in enumerate(omega_list):
@@ -241,7 +232,7 @@ visualize_characteristic(H_, omega_list, "opt.png")
 
 
 
-y = filtering(x, pole_array, zero_array, a0)
+y = filtering(x, p_array, q_array, a0)
 
 plt.plot(t_list, y)
 
