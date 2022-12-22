@@ -44,22 +44,24 @@ class IIRFilter:
         return y
 
 if __name__ == '__main__':
-    T = 0.4
-    Fs = 300/1
-    t_list = np.arange(0, T, 1/Fs)
+    # サンプリング時間
+    T = 0.5
 
-    x = np.sin(2 * 0.02 * Fs/2 * np.pi * t_list) + \
-        np.sin(2 * 0.4 *  Fs/2 * np.pi * t_list) + \
-        np.sin(2 * 0.8 *  Fs/2 * np.pi * t_list)
-    x = np.sin(2 * 0.4 *  Fs/2 * np.pi * t_list)
-    plt.plot(t_list, x, marker="o")
-    plt.savefig("origin.png")
+    # サンプリング周波数
+    Fs = 200
+    t_array = np.arange(0, T, 1/Fs)
 
-    with open('filter_coef.pickle', 'rb') as f:
+    x = np.cos(0.1 * np.pi * Fs * t_array) + \
+        np.sin(0.4 * np.pi * Fs * t_array) + \
+        np.sin(1.0 * np.pi * Fs * t_array)
+
+    with open('filter_coef_mse100.pickle', 'rb') as f:
         save_dict = pickle.load(f)
-
     iir = IIRFilter(save_dict['a0'], save_dict['p_array'], save_dict['q_array'])
-
     y = iir.filtering(x)
-    plt.plot(t_list, y)
+
+    plt.plot(t_array, x, label="origin")
+    plt.plot(t_array, y, label="filtered")
+    plt.xlabel("t")
+    plt.legend()
     plt.savefig("filtered.png")

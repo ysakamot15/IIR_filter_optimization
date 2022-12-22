@@ -2,22 +2,6 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 
-def visualize_characteristic(H, omega_list, save_file_name):
-    h = np.zeros(len(omega_list), dtype=np.complex)
-    for i, omg in enumerate(omega_list):
-        h[i] = H(omg)
-
-    fig = plt.figure()
-    ax1 = fig.add_subplot(2, 1, 1)
-    amp_h = np.abs(h)
-    angle_h = np.angle(h)
-    ax1.plot(omega_list, amp_h, marker=".")
-    ax2 = fig.add_subplot(2, 1, 2)
-    ax2.plot(omega_list, angle_h, marker=".")
-
-    fig.savefig(save_file_name)
-    plt.close()
-
 def compute_mean_squared_error(H_, ref_h, omega_list):
     h = np.zeros(len(omega_list), dtype=np.complex)
     for i, omg in enumerate(omega_list):
@@ -26,14 +10,12 @@ def compute_mean_squared_error(H_, ref_h, omega_list):
     e = np.real((ref_h - h) * np.conjugate(ref_h - h))
     return np.mean(e)
 
-
 def compute_abs_max_error(H_, ref_h, omega_list):
     h = np.zeros(len(omega_list), dtype=np.complex)
     for i, omg in enumerate(omega_list):
         h[i] = H_(omg)
     e = np.abs(ref_h - h)
     return np.max(e)
-
 
 # フィルタの周波数特性を計算する関数
 def frequency_characteristic_func(a0, p_array, q_array, omega):
@@ -48,7 +30,6 @@ def frequency_characteristic_func(a0, p_array, q_array, omega):
             (1 - np.conjugate(z) * np.exp(-1j * omega))
     return a0 * (numer/denomi)
 
-
 def obj_func(p_array, q_array, a0, ref_h, omega_list, c, error_func):
     H = lambda omega: frequency_characteristic_func(a0, p_array, q_array, omega)
     max_p2 = np.max(np.real(p_array * np.conjugate(p_array)))
@@ -56,9 +37,11 @@ def obj_func(p_array, q_array, a0, ref_h, omega_list, c, error_func):
 
     return e + (c * max_p2 if max_p2 >= 1.0 else 0.0)
 
+# 焼きなまし法のメイン処理
 def annealing(HD, omega_list, M, N, c, L, sigma, T, alpha, error_func,
               init_a0=None, init_p_array=None, init_q_array=None):
 
+    # 理想周波数特性の関数から各周波数点に対する周波数特性を計算する
     h = np.zeros(len(omega_list), dtype=np.complex)
     for i, omg in enumerate(omega_list):
         h[i] = HD(omg)
@@ -118,10 +101,31 @@ def annealing(HD, omega_list, M, N, c, L, sigma, T, alpha, error_func,
 
     return best_a0, best_p_array, best_q_array, best_cost
 
-if __name__ == '__main__':
-    np.random.seed(10)
+def visualize_characteristic(H, omega_list, save_file_name):
+    h = np.zeros(len(omega_list), dtype=np.complex)
+    for i, omg in enumerate(omega_list):
+        h[i] = H(omg)
 
-    # 理想的な周波数特性
+    fig = plt.figure()
+    amp_h = np.abs(h)
+    ax1 = fig.add_subplot(2, 1, 1)
+    ax1.plot(omega_list, amp_h, marker=".")
+    ax1.set_ylim(-0.1, 1.1)
+    ax1.set_ylabel("amplitude")
+
+    angle_h = np.angle(h)
+    ax2 = fig.add_subplot(2, 1, 2)
+    ax2.plot(omega_list, angle_h, marker=".")
+    ax2.set_ylim(-np.pi - 0.2, np.pi + 0.2)
+    ax2.set_xlabel("omega")
+    ax2.set_ylabel("phase")
+    fig.savefig(save_file_name)
+    plt.close()
+
+if __name__ == '__main__':
+    np.random.seed(0)
+
+    # 理想的な周波数特性の関数
     HD = lambda omg: np.exp(- 1j * 12 * omg) \
         if omg >= 2 * 0.2 * np.pi and omg <= 2 * 0.3 * np.pi  else 0.0
 
@@ -134,20 +138,20 @@ if __name__ == '__main__':
    # 理想的な周波数特性のグラフを作成
     visualize_characteristic(HD, omega_list, "ideal.png")
 
-    # 5回焼きなましをして最もよかったものを採用
+    # 100回焼きなましをして最もよかったものを採用
     best_cost = 1e9
-    for i in range(5):
+    for i in range(100):
         a0_, p_array_, q_array_, cost =\
             annealing(HD, omega_list, 8, 8, 5,
                       10000, 0.01, 10, 0.998,
-                      compute_mean_squared_error)
+                      compute_mean_squared_error) # 実験する誤差関数を指定
         if cost < best_cost:
             a0 = a0_
             p_array = np.copy(p_array_)
             q_array = np.copy(q_array_)
             best_cost = cost
 
-    # 求めたフィルタの周波数特性
+    # 求めたフィルタの周波数特性の関数
     H = lambda omega: frequency_characteristic_func(a0, p_array, q_array, omega)
 
     # 求めたフィルタの周波数特性のグラフを作成
